@@ -1,6 +1,7 @@
 # Fall
 
-   Fall is an app that lets your phone scream if you throw it somewhere
+   Fall is an app that lets your phone scream if you throw it somewhere.
+   
    Copyright (C) 2022  Gh05t-1337
 
    This program is free software: you can redistribute it and/or modify
