@@ -1,5 +1,7 @@
 # Fall
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
    Fall is an app that lets your phone scream if you throw it somewhere.
    
    Copyright (C) 2022  Gh05t-1337
