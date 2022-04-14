@@ -1,9 +1,9 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 # Fall
-   [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">][f-droid]
-
    Fall is an app that lets your phone scream if you throw it somewhere.
+   
+    [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">][f-droid]
    
 # License
    Copyright (C) 2022  Gh05t-1337
