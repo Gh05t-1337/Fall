@@ -1,0 +1,2 @@
+*changed icon
+*disabled screen rotation since it caused bugs
