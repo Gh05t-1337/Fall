@@ -27,7 +27,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     //private Button buttonStart;
     private Button buttonStop;
     private Button buttonOK;
-    int SHAKE_THRESHOLD=300;
+    int SHAKE_THRESHOLD=800;
     SensorManager man;
     Sensor sen;
     private EditText editText;
@@ -67,14 +67,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             speed.setText("needed speed to trigger: "+editText.getText().toString());
             Log.wtf("",editText.getText().toString());
         }
-        /*if (view == buttonStart) {
-            //starting service
-            startService(new Intent(this, MyService.class));
-        } else */if (view == buttonStop) {
-            //stopping service
-            //stopService(new Intent(this, MyService.class));
-            //MainActivity.this.finish();
-            //System.exit(0);
+        if (view == buttonStop) {
             if(!stopped) {
                 stopped = true;
                 buttonStop.setText("RESTART");
@@ -90,9 +83,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onSensorChanged(SensorEvent e){
         if(!stopped&&e.sensor.getType()==Sensor.TYPE_ACCELEROMETER){
-           // TextView  vi= new TextView(this);
-            //setContentView(vi);
-            //vi.setText(String.valueOf(e.timestamp));
             long curTim=System.currentTimeMillis();
 
             if(curTim-lastUpdate>100){
@@ -102,9 +92,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 float speed=Math.abs(e.values[0]+e.values[1]+e.values[2]-lx-ly-lz)/diff*10000;
 
                 if(speed>SHAKE_THRESHOLD){
-                   // TextView  vi= new TextView(this);
-                   // setContentView(vi);
-                   // vi.setText(String.valueOf(speed));
                     startService(new Intent(this, MyService.class));
                 }
 

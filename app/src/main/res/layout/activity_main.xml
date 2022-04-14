@@ -87,15 +87,15 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:ems="10"
-        android:hint="300"
-        android:inputType="numberDecimal"
-        android:text="300"
         android:gravity="center"
+        android:hint="800"
+        android:inputType="numberDecimal"
+        android:text="800"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/buttonStop"
-        tools:text="300" />
+        tools:text="800" />
 
     <Button
         android:id="@+id/okButton"
@@ -111,7 +111,7 @@
         android:id="@+id/speed"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="needed speed to trigger: 300"
+        android:text="needed speed to trigger: 800"
         android:textSize="16sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
