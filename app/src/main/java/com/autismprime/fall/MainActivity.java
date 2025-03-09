@@ -1,37 +1,37 @@
 package com.autismprime.fall;
 
+
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.hardware.SensorManager;
+import android.net.Uri;
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
-import com.autismprime.fall.R;
-
-import java.nio.charset.StandardCharsets;
-
 public class MainActivity extends AppCompatActivity implements View.OnClickListener, SensorEventListener{
     //button objects
     //private Button buttonStart;
-    private Button buttonStop;
+    private Button buttonStop,buttonSelectSound;
     private Button buttonOK;
-    int SHAKE_THRESHOLD=800;
+    int acceleration_threshold = 800;
     SensorManager man;
     Sensor sen;
     private EditText editText;
     private TextView speed;
+    private SharedPreferences sharedPreferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,12 +45,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //buttonStart =  findViewById(R.id.buttonStart);
         buttonStop =  findViewById(R.id.buttonStop);
         buttonOK=findViewById(R.id.okButton);
+        buttonSelectSound = findViewById(R.id.selectSoundButton);
 
         editText=findViewById(R.id.editTextNumberDecimal);
         speed=findViewById(R.id.speed);
         //buttonStart.setOnClickListener(this);
         buttonStop.setOnClickListener(this);
         buttonOK.setOnClickListener(this);
+        buttonSelectSound.setOnClickListener(view -> openFileChooser());
+
+        // Load saved preferences
+        sharedPreferences = getSharedPreferences("FallDetectionPrefs", MODE_PRIVATE);
     }
 
     @Override
@@ -63,8 +68,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View view) {
         if(view==buttonOK){
-            SHAKE_THRESHOLD=Integer.parseInt(editText.getText().toString());
-            speed.setText("needed speed to trigger: "+editText.getText().toString());
+            acceleration_threshold = Integer.parseInt(editText.getText().toString());
+            speed.setText("needed accelaration to trigger: "+String.valueOf((double)acceleration_threshold/100) +"m/s^2");
             Log.wtf("",editText.getText().toString());
         }
         if (view == buttonStop) {
@@ -83,26 +88,39 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onSensorChanged(SensorEvent e){
         if(!stopped&&e.sensor.getType()==Sensor.TYPE_ACCELEROMETER){
-            long curTim=System.currentTimeMillis();
+            float x = e.values[0];
+            float y = e.values[1];
+            float z = e.values[2];
 
-            if(curTim-lastUpdate>100){
-                long diff=curTim-lastUpdate;
-                lastUpdate=curTim;
+            // Calculate magnitude of acceleration
+            double acceleration = Math.sqrt(x * x + y * y + z * z);
 
-                float speed=Math.abs(e.values[0]+e.values[1]+e.values[2]-lx-ly-lz)/diff*10000;
-
-                if(speed>SHAKE_THRESHOLD){
-                    startService(new Intent(this, MyService.class));
-                }
-
-                lx=e.values[0];
-                ly=e.values[1];
-                lz=e.values[2];
+            // Check for free fall (threshold ~ 0 to 1 m/s²)
+            if (acceleration < 9.81 - (double) acceleration_threshold / 100) {
+                startService(new Intent(this, MyService.class));
             }
         }
     }
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy){
 
+    }
+    // File chooser to select custom sound
+    private final ActivityResultLauncher<Intent> filePickerLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        sharedPreferences.edit().putString("customSoundUri", uri.toString()).apply();
+                        Log.d("CustomSound", "Selected sound URI: " + uri.toString());
+                    }
+                }
+            });
+
+    private void openFileChooser() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("audio/*"); // Allow only audio files
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        filePickerLauncher.launch(intent);
     }
 }
