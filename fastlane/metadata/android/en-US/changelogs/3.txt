@@ -1,0 +1,3 @@
+*should be actually only triggering on falls now
+*should be actually working in background now (if notifications are permitted)
+*added sound file picker

@@ -4,6 +4,7 @@ package com.autismprime.fall;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -11,17 +12,22 @@ import android.hardware.SensorEventListener;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import android.hardware.SensorManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
+import android.Manifest;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener, SensorEventListener{
+public class MainActivity extends AppCompatActivity implements View.OnClickListener{
     //button objects
     //private Button buttonStart;
     private Button buttonStop,buttonSelectSound;
@@ -35,12 +41,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS,Manifest.permission.BODY_SENSORS}, 1);
+            }
+        }
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        Log.wtf("TAG", "onCreate:" );
 
         man=(SensorManager)this.getSystemService(Context.SENSOR_SERVICE);
         sen=man.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        man.registerListener(this,sen,SensorManager.SENSOR_DELAY_NORMAL);
 
         //buttonStart =  findViewById(R.id.buttonStart);
         buttonStop =  findViewById(R.id.buttonStop);
@@ -56,6 +69,31 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         // Load saved preferences
         sharedPreferences = getSharedPreferences("FallDetectionPrefs", MODE_PRIVATE);
+
+        startFallDetectionService();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults){
+
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        stopFallDetectionService();
+        startFallDetectionService();
+    }
+
+
+    private void startFallDetectionService() {
+        Intent serviceIntent = new Intent(this, MyService.class);
+        startService(serviceIntent);
+        //statusText.setText("Fall Detection Running...");
+        Toast.makeText(this, "Service Started", Toast.LENGTH_SHORT).show();
+    }
+
+    private void stopFallDetectionService() {
+        Intent serviceIntent = new Intent(this, MyService.class);
+        stopService(serviceIntent);
+        //statusText.setText("Fall Detection Stopped.");
+        Toast.makeText(this, "Service Stopped", Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -69,42 +107,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View view) {
         if(view==buttonOK){
             acceleration_threshold = Integer.parseInt(editText.getText().toString());
+            sharedPreferences.edit().putInt("accelerationThreshold", acceleration_threshold).apply();
             speed.setText("needed accelaration to trigger: "+String.valueOf((double)acceleration_threshold/100) +"m/s^2");
             Log.wtf("",editText.getText().toString());
         }
         if (view == buttonStop) {
             if(!stopped) {
                 stopped = true;
+                stopFallDetectionService();
                 buttonStop.setText("RESTART");
             }else{
                 stopped=false;
+                startFallDetectionService();
                 buttonStop.setText("STOP");
             }
         }
     }
-    long lastUpdate=0;
-    float lx,ly,lz;
 
-    @Override
-    public void onSensorChanged(SensorEvent e){
-        if(!stopped&&e.sensor.getType()==Sensor.TYPE_ACCELEROMETER){
-            float x = e.values[0];
-            float y = e.values[1];
-            float z = e.values[2];
-
-            // Calculate magnitude of acceleration
-            double acceleration = Math.sqrt(x * x + y * y + z * z);
-
-            // Check for free fall (threshold ~ 0 to 1 m/s²)
-            if (acceleration < 9.81 - (double) acceleration_threshold / 100) {
-                startService(new Intent(this, MyService.class));
-            }
-        }
-    }
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy){
-
-    }
     // File chooser to select custom sound
     private final ActivityResultLauncher<Intent> filePickerLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {

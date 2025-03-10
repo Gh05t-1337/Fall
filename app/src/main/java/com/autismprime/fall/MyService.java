@@ -4,8 +4,13 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
@@ -15,8 +20,10 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
-public class MyService extends Service {
+public class MyService extends Service implements SensorEventListener {
     private static final String CHANNEL_ID = "FallDetectionChannel";
+    private static final float FALL_THRESHOLD = 2.0f; // Adjust based on sensitivity
+    private SensorManager sensorManager;
     private MediaPlayer player;
     private SharedPreferences sharedPreferences;
 
@@ -31,28 +38,60 @@ public class MyService extends Service {
         super.onCreate();
         createNotificationChannel();
 
+        // Start foreground service with notification
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Fall Detection Running")
                 .setContentText("Monitoring for falls...")
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setOngoing(true) // Ensures that the notification is persistent
                 .build();
-
-        startForeground(1, notification); // Start as Foreground Service
+        startForeground(1, notification);
 
         sharedPreferences = getSharedPreferences("FallDetectionPrefs", MODE_PRIVATE);
+
+        // Initialize accelerometer for fall detection
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (sensorManager != null) {
+            Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        String customSoundUri = sharedPreferences.getString("customSoundUri", null);
+        return START_STICKY; // Keep the service running
+    }
 
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        int acceleration_threshold = sharedPreferences.getInt("accelerationThreshold", 800); // Default 100 if not set
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            float x = event.values[0];
+            float y = event.values[1];
+            float z = event.values[2];
+
+            // Calculate magnitude of acceleration
+            double acceleration = Math.sqrt(x * x + y * y + z * z);
+
+            // Check for free fall (threshold ~ 0 to 1 m/s²)
+            if (acceleration < 9.81 - (double) acceleration_threshold / 100) {
+                triggerFallAlert();
+            }
+        }
+    }
+
+    private void triggerFallAlert() {
         if (player == null) {
-            if (customSoundUri != null) {
-                try {
-                    player = MediaPlayer.create(this, Uri.parse(customSoundUri)); // Load custom sound
-                } catch (Exception e) {
-                    player = null; // Reset player if there's an error
+            String customSoundUri = sharedPreferences.getString("customSoundUri", null);
+
+            try {
+                if (customSoundUri != null) {
+                    player = MediaPlayer.create(this, Uri.parse(customSoundUri));
+                } else {
+                    player = MediaPlayer.create(this, R.raw.song);
                 }
+            } catch (Exception e) {
+                player = null;
             }
 
             // If custom sound is not chosen or fails, use default
@@ -62,13 +101,10 @@ public class MyService extends Service {
 
             if (player != null) {
                 player.setOnCompletionListener(mp -> stopPlayer());
-                player.start(); // Play the sound
+                player.start();
             }
         }
-
-        return START_STICKY; // Keep service running
     }
-
 
     private void stopPlayer() {
         if (player != null) {
@@ -80,9 +116,15 @@ public class MyService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (player != null) {
-            player.stop();
+        if (sensorManager != null) {
+            sensorManager.unregisterListener(this);
         }
+        stopPlayer();
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // Not needed for basic fall detection
     }
 
     private void createNotificationChannel() {
