@@ -22,7 +22,9 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.Manifest;
@@ -37,7 +39,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     Sensor sen;
     private EditText editText;
     private TextView speed;
+    private SeekBar volumeSeekBar;
+    private TextView volumeValue;
+    private CheckBox keepRunningInBackgroundCheckBox;
     private SharedPreferences sharedPreferences;
+    private static final String PREF_TARGET_VOLUME_PERCENT = "targetVolumePercent";
+    private static final String PREF_KEEP_RUNNING_IN_BACKGROUND = "keepRunningInBackground";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,6 +69,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         editText=findViewById(R.id.editTextNumberDecimal);
         speed=findViewById(R.id.speed);
+        volumeSeekBar=findViewById(R.id.volumeSeekBar);
+        volumeValue=findViewById(R.id.volumeValue);
+        keepRunningInBackgroundCheckBox=findViewById(R.id.keepRunningInBackgroundCheckBox);
         //buttonStart.setOnClickListener(this);
         buttonStop.setOnClickListener(this);
         buttonOK.setOnClickListener(this);
@@ -70,7 +80,51 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         // Load saved preferences
         sharedPreferences = getSharedPreferences("FallDetectionPrefs", MODE_PRIVATE);
 
+        // Restore previously saved sensitivity so it survives app restarts
+        acceleration_threshold = sharedPreferences.getInt("accelerationThreshold", acceleration_threshold);
+        editText.setText(String.valueOf(acceleration_threshold));
+        speed.setText("needed accelaration to trigger: " + ((double) acceleration_threshold / 100) + "m/s^2");
+
+        setupVolumeControl();
+        setupKeepRunningInBackgroundControl();
+
         startFallDetectionService();
+    }
+
+    // Lets the user configure the volume level that gets forced when a fall is detected
+    private void setupVolumeControl() {
+        int savedVolumePercent = sharedPreferences.getInt(PREF_TARGET_VOLUME_PERCENT, 100);
+        volumeSeekBar.setProgress(savedVolumePercent);
+        volumeValue.setText(savedVolumePercent + "%");
+
+        volumeSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                volumeValue.setText(progress + "%");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // no-op
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                sharedPreferences.edit().putInt(PREF_TARGET_VOLUME_PERCENT, seekBar.getProgress()).apply();
+            }
+        });
+    }
+
+    // Lets the user decide whether fall detection should keep running in the background
+    // after they close the app, or whether closing the app should stop it (default: keep
+    // running, matching the app's whole purpose, but some people find the persistent
+    // notification/background monitoring annoying and want to opt out).
+    private void setupKeepRunningInBackgroundControl() {
+        boolean keepRunning = sharedPreferences.getBoolean(PREF_KEEP_RUNNING_IN_BACKGROUND, true);
+        keepRunningInBackgroundCheckBox.setChecked(keepRunning);
+
+        keepRunningInBackgroundCheckBox.setOnCheckedChangeListener((buttonView, isChecked) ->
+                sharedPreferences.edit().putBoolean(PREF_KEEP_RUNNING_IN_BACKGROUND, isChecked).apply());
     }
 
     @Override
@@ -96,10 +150,22 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Toast.makeText(this, "Service Stopped", Toast.LENGTH_SHORT).show();
     }
 
+    // Whether MyService keeps running here depends on the "keep monitoring in background"
+    // checkbox the user set on screen (persisted in PREF_KEEP_RUNNING_IN_BACKGROUND):
+    //  - checked (default): the foreground service is left alone, so fall detection keeps
+    //    monitoring after the user closes/leaves this Activity.
+    //  - unchecked: closing the app also stops the service, since the user explicitly
+    //    said they don't want background monitoring.
+    // Previously this method unconditionally force-stopped the service on every
+    // onDestroy(), which meant fall detection silently stopped as soon as the app was
+    // closed, with no way to opt into background monitoring at all.
     @Override
     protected void onDestroy(){
         super.onDestroy();
-        stopService(new Intent(this, MyService.class));
+        boolean keepRunning = sharedPreferences.getBoolean(PREF_KEEP_RUNNING_IN_BACKGROUND, true);
+        if (!keepRunning) {
+            stopService(new Intent(this, MyService.class));
+        }
     }
 
     boolean stopped=false;

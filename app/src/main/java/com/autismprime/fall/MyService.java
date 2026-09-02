@@ -11,6 +11,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
@@ -23,6 +24,7 @@ import androidx.core.app.NotificationCompat;
 public class MyService extends Service implements SensorEventListener {
     private static final String CHANNEL_ID = "FallDetectionChannel";
     private static final float FALL_THRESHOLD = 2.0f; // Adjust based on sensitivity
+    private static final String PREF_TARGET_VOLUME_PERCENT = "targetVolumePercent";
     private SensorManager sensorManager;
     private MediaPlayer player;
     private SharedPreferences sharedPreferences;
@@ -82,6 +84,8 @@ public class MyService extends Service implements SensorEventListener {
 
     private void triggerFallAlert() {
         if (player == null) {
+            forceConfiguredVolume();
+
             String customSoundUri = sharedPreferences.getString("customSoundUri", null);
 
             try {
@@ -110,6 +114,32 @@ public class MyService extends Service implements SensorEventListener {
         if (player != null) {
             player.release();
             player = null;
+        }
+    }
+
+    // Forces the device's music-stream volume up to the level the user configured in the
+    // app, so the alert is always audible even if the phone's volume was turned down or
+    // was affected while it was falling/tumbling. The alert sound is played on
+    // STREAM_MUSIC (MediaPlayer's default), so that's the stream we adjust here.
+    private void forceConfiguredVolume() {
+        int targetVolumePercent = sharedPreferences.getInt(PREF_TARGET_VOLUME_PERCENT, 100);
+        // Clamp defensively in case a bad value ever ends up in prefs.
+        if (targetVolumePercent < 0) targetVolumePercent = 0;
+        if (targetVolumePercent > 100) targetVolumePercent = 100;
+
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            return;
+        }
+
+        try {
+            int maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            int targetVolume = Math.round(maxVolume * (targetVolumePercent / 100.0f));
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolume, 0);
+        } catch (SecurityException e) {
+            // Some OEMs restrict volume changes while Do Not Disturb is active; fail
+            // quietly rather than crashing the service.
+            Log.w("MyService", "Unable to force volume", e);
         }
     }
 
