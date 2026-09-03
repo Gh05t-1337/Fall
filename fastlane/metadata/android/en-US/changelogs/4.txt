@@ -1,4 +1,5 @@
 *fixed: the app can now be configured to no longer stop fall detection in the background when you close it
 *added: you can now set a volume level that gets forced on when a fall is detected, so the alarm is always audible
 *added: a checkbox to control whether fall detection keeps running after you close the app
+*added: stop/restart button on the notification
 *added: settings are now remembered between app launches
