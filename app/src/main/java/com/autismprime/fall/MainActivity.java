@@ -24,6 +24,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -33,6 +34,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     //button objects
     //private Button buttonStart;
     private Button buttonStop,buttonSelectSound;
+    private ImageButton buttonResetSound;
     private Button buttonOK;
     int acceleration_threshold = 800;
     SensorManager man;
@@ -66,6 +68,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         buttonStop =  findViewById(R.id.buttonStop);
         buttonOK=findViewById(R.id.okButton);
         buttonSelectSound = findViewById(R.id.selectSoundButton);
+        buttonResetSound = findViewById(R.id.resetSoundButton);
 
         editText=findViewById(R.id.editTextNumberDecimal);
         speed=findViewById(R.id.speed);
@@ -76,6 +79,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         buttonStop.setOnClickListener(this);
         buttonOK.setOnClickListener(this);
         buttonSelectSound.setOnClickListener(view -> openFileChooser());
+        buttonResetSound.setOnClickListener(view -> resetSoundToDefault());
 
         // Load saved preferences
         sharedPreferences = getSharedPreferences("FallDetectionPrefs", MODE_PRIVATE);
@@ -226,5 +230,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         // Request a persistable grant up front so takePersistableUriPermission() succeeds.
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         filePickerLauncher.launch(intent);
+    }
+
+    // Clears the chosen custom sound so the app falls back to the bundled default alert
+    // sound (R.raw.song) again. Also releases the persisted read permission we took on
+    // that URI in the file picker callback, since we no longer need access to it.
+    private void resetSoundToDefault() {
+        String customSoundUri = sharedPreferences.getString("customSoundUri", null);
+        if (customSoundUri != null) {
+            try {
+                getContentResolver().releasePersistableUriPermission(
+                        Uri.parse(customSoundUri), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (SecurityException e) {
+                // We may not hold this permission anymore (e.g. it was already revoked
+                // by the system or the provider); nothing to clean up in that case.
+                Log.w("CustomSound", "Could not release permission for " + customSoundUri, e);
+            }
+        }
+        sharedPreferences.edit().remove("customSoundUri").apply();
+        Toast.makeText(this, "Reset to default sound", Toast.LENGTH_SHORT).show();
     }
 }

@@ -34,6 +34,19 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.488" />
 
+    <ImageButton
+        android:id="@+id/resetSoundButton"
+        android:layout_width="46dp"
+        android:layout_height="48dp"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="@color/white"
+        android:scaleType="fitCenter"
+        android:src="@drawable/reset_1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.055"
+        app:layout_constraintStart_toEndOf="@+id/selectSoundButton"
+        app:layout_constraintTop_toBottomOf="@+id/buttonStop" />
+
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
