@@ -137,6 +137,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
 
     private void startFallDetectionService() {
+        // Always start fresh: if the last thing that happened was pausing monitoring
+        // from the notification's toggle action, a full (re)start from the app should
+        // still actually start monitoring, not silently resume in a paused state.
+        sharedPreferences.edit().putBoolean("monitoringPaused", false).apply();
         Intent serviceIntent = new Intent(this, MyService.class);
         startService(serviceIntent);
         //statusText.setText("Fall Detection Running...");
@@ -196,8 +200,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     Uri uri = result.getData().getData();
                     if (uri != null) {
+                        // ACTION_OPEN_DOCUMENT only grants temporary read access tied to
+                        // this Activity instance. Since the fall-detection service is meant
+                        // to keep running (and play this sound) long after MainActivity is
+                        // destroyed, we need a *persistable* grant, or the permission gets
+                        // revoked as soon as the app is closed and the custom sound silently
+                        // stops working (falling back to the default sound).
+                        try {
+                            getContentResolver().takePersistableUriPermission(
+                                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        } catch (SecurityException e) {
+                            Log.w("CustomSound", "Could not persist read permission for " + uri, e);
+                        }
                         sharedPreferences.edit().putString("customSoundUri", uri.toString()).apply();
                         Log.d("CustomSound", "Selected sound URI: " + uri.toString());
+                        Toast.makeText(this, "Custom sound saved", Toast.LENGTH_SHORT).show();
                     }
                 }
             });
@@ -206,6 +223,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("audio/*"); // Allow only audio files
         intent.addCategory(Intent.CATEGORY_OPENABLE);
+        // Request a persistable grant up front so takePersistableUriPermission() succeeds.
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         filePickerLauncher.launch(intent);
     }
 }

@@ -3,6 +3,7 @@ package com.autismprime.fall;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -25,9 +26,14 @@ public class MyService extends Service implements SensorEventListener {
     private static final String CHANNEL_ID = "FallDetectionChannel";
     private static final float FALL_THRESHOLD = 2.0f; // Adjust based on sensitivity
     private static final String PREF_TARGET_VOLUME_PERCENT = "targetVolumePercent";
+    private static final String PREF_MONITORING_PAUSED = "monitoringPaused";
+    private static final String ACTION_TOGGLE_MONITORING = "com.autismprime.fall.ACTION_TOGGLE_MONITORING";
+    private static final int NOTIFICATION_ID = 1;
     private SensorManager sensorManager;
+    private Sensor accelerometer;
     private MediaPlayer player;
     private SharedPreferences sharedPreferences;
+    private boolean monitoringPaused = false;
 
     @Nullable
     @Override
@@ -40,28 +46,77 @@ public class MyService extends Service implements SensorEventListener {
         super.onCreate();
         createNotificationChannel();
 
-        // Start foreground service with notification
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Fall Detection Running")
-                .setContentText("Monitoring for falls...")
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setOngoing(true) // Ensures that the notification is persistent
-                .build();
-        startForeground(1, notification);
-
         sharedPreferences = getSharedPreferences("FallDetectionPrefs", MODE_PRIVATE);
+        monitoringPaused = sharedPreferences.getBoolean(PREF_MONITORING_PAUSED, false);
+
+        // Start foreground service with a notification. The notification carries a
+        // Stop/Restart action so the user can pause or resume fall detection without
+        // having to open the app.
+        startForeground(NOTIFICATION_ID, buildNotification(monitoringPaused));
 
         // Initialize accelerometer for fall detection
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
-            Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        }
+        if (!monitoringPaused) {
+            registerAccelerometerListener();
         }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_TOGGLE_MONITORING.equals(intent.getAction())) {
+            toggleMonitoring();
+        }
         return START_STICKY; // Keep the service running
+    }
+
+    // Called when the user taps the Stop/Restart action on the persistent notification.
+    // Unlike the app's own STOP button (which fully stops the service), this just
+    // pauses/resumes the accelerometer listener so the foreground notification (and its
+    // toggle action) stays available the whole time.
+    private void toggleMonitoring() {
+        monitoringPaused = !monitoringPaused;
+        sharedPreferences.edit().putBoolean(PREF_MONITORING_PAUSED, monitoringPaused).apply();
+
+        if (monitoringPaused) {
+            if (sensorManager != null) {
+                sensorManager.unregisterListener(this);
+            }
+            stopPlayer(); // don't let an in-progress alarm keep playing once paused
+        } else {
+            registerAccelerometerListener();
+        }
+
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.notify(NOTIFICATION_ID, buildNotification(monitoringPaused));
+        }
+    }
+
+    private void registerAccelerometerListener() {
+        if (sensorManager != null && accelerometer != null) {
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        }
+    }
+
+    private Notification buildNotification(boolean paused) {
+        Intent toggleIntent = new Intent(this, MyService.class).setAction(ACTION_TOGGLE_MONITORING);
+        PendingIntent togglePendingIntent = PendingIntent.getService(
+                this, 0, toggleIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        String actionLabel = paused ? "RESTART" : "STOP";
+        String contentText = paused ? "Fall detection paused" : "Monitoring for falls...";
+
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Fall Detection")
+                .setContentText(contentText)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setOngoing(true) // Ensures that the notification is persistent
+                .addAction(0, actionLabel, togglePendingIntent)
+                .build();
     }
 
     @Override
